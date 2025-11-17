@@ -1,15 +1,14 @@
 --[[
 =========================================================================================================================
-    QuantumLeap v7.0 - Persistence Edition
-    Versión: 7.0 (Configuración guardada y lógica de auto-búsqueda)
-    Objetivo: Un script "configúralo y olvídalo" que recuerda tus ajustes y busca automáticamente.
+    QuantumLeap v8.0 - Control Edition
+    Versión: 8.0 (Control del usuario + Configuración guardada)
+    Objetivo: El script definitivo que recuerda tus ajustes y te da control total sobre cuándo iniciar la búsqueda.
 =========================================================================================================================
 ]]
 
 local success, err = pcall(function()
-    -- Verificar si las funciones de lectura/escritura existen
     if not isfile or not writefile or not readfile then
-        warn("QuantumLeap v7.0 requiere un ejecutor con capacidad de leer/escribir archivos (readfile/writefile).")
+        warn("QuantumLeap v8.0 requiere un ejecutor con capacidad de leer/escribir archivos (readfile/writefile).")
         return
     end
 
@@ -23,8 +22,9 @@ local success, err = pcall(function()
     local Workspace = game:GetService("Workspace")
     local LocalPlayer = Players.LocalPlayer
     local PlaceID = game.PlaceId
-    local CONFIG_FILE = "QuantumLeap_Config.txt" -- Archivo para guardar la configuración
+    local CONFIG_FILE = "QuantumLeap_Config.txt"
 
+    local busquedaActiva = false
     local gui
 
     -- =====================================================================================================================
@@ -86,15 +86,14 @@ local success, err = pcall(function()
             TeleportService:TeleportToPlaceInstance(PlaceID, servidores[math.random(1, #servidores)], LocalPlayer)
         else
             actualizarStatus("No hay servidores disponibles.", Color3.fromRGB(255, 100, 100))
+            busquedaActiva = false -- Detener si no hay a dónde ir
         end
     end
 
-    local function autoScanAndHop()
-        actualizarStatus("Esperando carga del servidor...")
-        task.wait(5) -- Espera crucial para que todo en el nuevo servidor cargue
-
+    local function iniciarBusqueda()
+        task.wait(1) -- Pequeña espera al inicio
         local valorMinimo = procesarInputValor(gui.mainFrame.ValorInput.Text)
-        actualizarStatus("Escaneando para > "..formatNumber(valorMinimo).."/s")
+        actualizarStatus("Buscando > "..formatNumber(valorMinimo).."/s")
         
         local infoEncontrada = escanearServidor(valorMinimo)
         
@@ -103,11 +102,14 @@ local success, err = pcall(function()
             local overhead = infoEncontrada:FindFirstChild("AnimalOverhead")
             if overhead and overhead:FindFirstChild("DisplayName") then nombre = overhead.DisplayName.Value end
             
-            actualizarStatus("¡ENCONTRADO!: "..nombre..". Búsqueda finalizada.", Color3.fromRGB(0, 255, 127))
-            gui.mainFrame.ValorInput.TextColor3 = Color3.fromRGB(0, 255, 127)
+            actualizarStatus("¡ENCONTRADO!: "..nombre, Color3.fromRGB(0, 255, 127))
+            gui.mainFrame.ToggleButton.Text = "ENCONTRADO"
+            gui.mainFrame.ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 100, 50)
+            busquedaActiva = false
         else
-            actualizarStatus("Servidor vacío. Saltando a uno nuevo...", Color3.fromRGB(255, 255, 150))
-            task.wait(2) -- Pequeña pausa para leer el mensaje
+            if not busquedaActiva then return end -- Verificar si el usuario canceló mientras se escaneaba
+            actualizarStatus("Servidor vacío. Saltando...", Color3.fromRGB(255, 255, 150))
+            task.wait(2)
             saltarDeServidor()
         end
     end
@@ -116,15 +118,15 @@ local success, err = pcall(function()
     --  CREACIÓN DE LA INTERFAZ GRÁFICA (GUI)
     -- =====================================================================================================================
     local function crearGUI()
-        if CoreGui:FindFirstChild("QuantumLeapPersistence") then CoreGui.QuantumLeapPersistence:Destroy() end
+        if CoreGui:FindFirstChild("QuantumLeapControl") then CoreGui.QuantumLeapControl:Destroy() end
         
         gui = Instance.new("ScreenGui", CoreGui)
-        gui.Name = "QuantumLeapPersistence"
+        gui.Name = "QuantumLeapControl"
         gui.ResetOnSpawn = false
 
         local mainFrame = Instance.new("Frame", gui)
         mainFrame.Name = "mainFrame"
-        mainFrame.Size = UDim2.new(0, 280, 0, 110)
+        mainFrame.Size = UDim2.new(0, 280, 0, 140)
         mainFrame.Position = UDim2.new(1, -290, 0, 10)
         mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
         mainFrame.Draggable = true
@@ -133,7 +135,7 @@ local success, err = pcall(function()
         local titleLabel = Instance.new("TextLabel", mainFrame)
         titleLabel.Size = UDim2.new(1, 0, 0, 30)
         titleLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
-        titleLabel.Text = "QuantumLeap v7.0 🔥"
+        titleLabel.Text = "QuantumLeap v8.0 🔥"
         titleLabel.Font = Enum.Font.SourceSansBold
         titleLabel.TextColor3 = Color3.new(1, 1, 1)
         
@@ -142,7 +144,7 @@ local success, err = pcall(function()
         statusLabel.Size = UDim2.new(1, -20, 0, 20)
         statusLabel.Position = UDim2.new(0, 10, 0, 35)
         statusLabel.BackgroundTransparency = 1
-        statusLabel.Text = "Estado: Iniciando..."
+        statusLabel.Text = "Estado: Inactivo"
         statusLabel.TextColor3 = Color3.new(1, 1, 1)
         statusLabel.Font = Enum.Font.SourceSans
         statusLabel.TextSize = 14
@@ -151,7 +153,7 @@ local success, err = pcall(function()
         local valorInput = Instance.new("TextBox", mainFrame)
         valorInput.Name = "ValorInput"
         valorInput.Size = UDim2.new(1, -20, 0, 35)
-        valorInput.Position = UDim2.new(0, 10, 1, -45)
+        valorInput.Position = UDim2.new(0, 10, 0, 55)
         valorInput.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
         valorInput.TextColor3 = Color3.new(1, 1, 1)
         valorInput.PlaceholderText = "Generación Mínima/s"
@@ -159,25 +161,46 @@ local success, err = pcall(function()
         valorInput.TextSize = 16
         Instance.new("UICorner", valorInput).CornerRadius = UDim.new(0, 8)
 
-        -- Cargar la configuración guardada
+        local toggleButton = Instance.new("TextButton", mainFrame)
+        toggleButton.Name = "ToggleButton"
+        toggleButton.Size = UDim2.new(1, -20, 0, 35)
+        toggleButton.Position = UDim2.new(0, 10, 1, -45)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 85)
+        toggleButton.Text = "INICIAR AUTOHOP"
+        toggleButton.Font = Enum.Font.SourceSansBold
+        toggleButton.TextColor3 = Color3.new(1, 1, 1)
+        Instance.new("UICorner", toggleButton).CornerRadius = UDim.new(0, 8)
+
         if isfile(CONFIG_FILE) then
             valorInput.Text = readfile(CONFIG_FILE)
         else
-            valorInput.Text = "10m" -- Valor por defecto la primera vez
+            valorInput.Text = "10m"
         end
 
-        -- Guardar la configuración cuando el usuario la cambie
-        valorInput.FocusLost:Connect(function()
-            writefile(CONFIG_FILE, valorInput.Text)
-            actualizarStatus("Configuración guardada.", Color3.fromRGB(150, 255, 150))
+        valorInput.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                writefile(CONFIG_FILE, valorInput.Text)
+                actualizarStatus("Configuración guardada.", Color3.fromRGB(150, 255, 150))
+            end
+        end)
+
+        toggleButton.MouseButton1Click:Connect(function()
+            if toggleButton.Text == "ENCONTRADO" then return end
+            
+            busquedaActiva = not busquedaActiva
+            if busquedaActiva then
+                toggleButton.Text = "DETENER AUTOHOP"
+                toggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+                task.spawn(iniciarBusqueda)
+            else
+                toggleButton.Text = "INICIAR AUTOHOP"
+                toggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 85)
+                actualizarStatus("Detenido por el usuario.")
+            end
         end)
     end
 
-    -- =====================================================================================================================
-    --  PUNTO DE ENTRADA
-    -- =====================================================================================================================
     crearGUI()
-    autoScanAndHop()
 end)
 
 if not success then
